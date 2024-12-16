@@ -4,6 +4,7 @@ from option_uploader import OptionsUploaderGUI
 from add_options_to_group import RestoConcept_Option_ManagerGUI
 
 
+
 class MainPage(QWidget):
     def __init__(self, username, password):
         super().__init__()

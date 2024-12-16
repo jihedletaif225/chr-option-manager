@@ -3,6 +3,10 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLa
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
+from login_handler import LoginManager
+from config import BASE_URL
+
+
 
 class AutomationWorker(QThread):
     log_update = pyqtSignal(str)
@@ -23,7 +27,11 @@ class AutomationWorker(QThread):
             page = browser.new_page()
 
             try:
-                self.login(page)
+                login_manager = LoginManager(self.username, self.password)
+                if not login_manager.login(page):
+                    self.error_occurred.emit("Login failed. Please check your username and password.")
+                    return
+
                 for product_id in self.product_ids:  # Iterate over each product ID
                     self.add_product_to_group(page, product_id)
             except Exception as e:
@@ -32,27 +40,12 @@ class AutomationWorker(QThread):
                 browser.close()
                 self.finished.emit()
 
-    def login(self, page):
-        self.log_update.emit("Attempting to log in...")
-        self.progress_update.emit(10)
-        page.goto("https://www.restoconcept.com/admin/logon.asp")
-        page.fill("#adminuser", self.username)
-        page.fill("#adminPass", self.password)
-        page.click("#btn1")
-        try:
-            page.wait_for_selector(
-                'td[align="center"][style="background-color:#eeeeee"]:has-text("© Copyright 2024 - Restoconcept")',
-                timeout=5000
-            )
-            self.log_update.emit("Login successful.")
-            self.progress_update.emit(40)
-        except PlaywrightTimeoutError:
-            raise Exception("Login failed. Please check your username and password.")
+
 
     def add_product_to_group(self, page, product_id):
         self.log_update.emit(f"Navigating to product page for ID: {product_id}")
         self.progress_update.emit(60)
-        page.goto(f"https://www.restoconcept.com/admin/SA_prod_edit.asp?action=edit&recid={product_id}")
+        page.goto(f"{BASE_URL}/SA_prod_edit.asp?action=edit&recid={product_id}")
 
         self.log_update.emit(f"Selecting group: {self.group_name} for product ID {product_id}")
         self.progress_update.emit(80)

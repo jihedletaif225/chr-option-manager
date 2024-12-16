@@ -4,6 +4,7 @@ import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QFrame, QCheckBox, QProgressBar
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from login_handler import LoginManager
 
 from main_page import MainPage
 
@@ -27,7 +28,10 @@ class LoginWorker(QThread):
             page = browser.new_page()
 
             try:
-                self.login(page)
+                login_manager = LoginManager(self.username, self.password)
+                if not login_manager.login(page):
+                    self.error_occurred.emit("Login failed. Please check your username and password.")
+                    return
                 self.login_success = True
                 self.login_successful.emit(True)  # Emit success signal on successful login
             except Exception as e:
@@ -36,25 +40,6 @@ class LoginWorker(QThread):
             finally:
                 browser.close()
                 self.finished.emit()
-
-    def login(self, page):
-        self.log_update.emit("Attempting to log in...")
-        self.progress_update.emit(10)
-        page.goto("https://www.restoconcept.com/admin/logon.asp")
-        page.fill("#adminuser", self.username)
-        page.fill("#adminPass", self.password)
-        page.click("#btn1")
-        try:
-            page.wait_for_selector(
-                'td[align="center"][style="background-color:#eeeeee"]:has-text("© Copyright 2024 - Restoconcept")',
-                timeout=5000
-            )
-            self.log_update.emit("Login successful.")
-            self.progress_update.emit(100)
-        except PlaywrightTimeoutError:
-            raise Exception("Login failed. Please check your username and password.")
-        
-
 
 
 class MainWindow(QMainWindow):

@@ -8,6 +8,10 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QP
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
+from login_handler import LoginManager
+from config import BASE_URL
+
+
 class OptionsUploaderThread(QThread):
     progress_update = pyqtSignal(int)
     status_update = pyqtSignal(str)
@@ -32,7 +36,10 @@ class OptionsUploaderThread(QThread):
                 page = context.new_page()
 
                 self.log_update.emit("Starting the upload process...")
-                self.login(page)
+                login_manager = LoginManager(self.username, self.password)
+                if not login_manager.login(page):
+                    self.error_occurred.emit("Login failed. Please check your username and password.")
+                    return 
 
                 for index, row in options_df.iterrows():
                     self.status_update.emit(f"Processing option {index + 1} of {total_rows}")
@@ -57,21 +64,9 @@ class OptionsUploaderThread(QThread):
         self.status_update.emit("Upload process completed.")
         self.log_update.emit("Upload process completed. Check the log for details.")
 
-    def login(self, page):
-        self.log_update.emit("Attempting to log in...")
-        page.goto("https://www.restoconcept.com/admin/logon.asp")
-        page.fill("#adminuser", self.username)
-        page.fill("#adminPass", self.password)
-        page.click("#btn1")
-
-        try:
-            page.wait_for_selector('td[align="center"]:has-text("© Copyright 2024 - Restoconcept")', timeout=5000)
-            self.log_update.emit("Login successful.")
-        except PlaywrightTimeoutError:
-            raise Exception("Login failed. Please check your username and password.")
-
+    
     def navigate_to_options_page(self, page):
-        page.goto("https://www.restoconcept.com/admin/options/optionslist.asp")
+        page.goto(f"{BASE_URL}/options/optionslist.asp")
         page.click('a[href="/admin/SA_opt_edit.asp?action=add"]')
 
     def fill_option_form(self, page, row):
@@ -112,7 +107,7 @@ class OptionsUploaderGUI(QWidget):
 
     def initUI(self):
         self.setWindowTitle('RestoConcept Options Uploader')
-        self.setGeometry(300, 300, 800, 600)
+        self.setGeometry(100, 100, 600, 600)
 
         layout = QVBoxLayout()
 

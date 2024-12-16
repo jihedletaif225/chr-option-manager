@@ -6,6 +6,10 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import time
 
+from login_handler import LoginManager
+from config import BASE_URL
+
+
 class PlaywrightWorker(QThread):
     progress_update = pyqtSignal(int)
     status_update = pyqtSignal(str)
@@ -26,7 +30,9 @@ class PlaywrightWorker(QThread):
                 context = browser.new_context()
                 page = context.new_page()
 
-                if not self.login(page):
+                login_manager = LoginManager(self.username, self.password)
+                if not login_manager.login(page):
+                    self.error_occurred.emit("Login failed. Please check your username and password.")
                     return
 
                 if not self.navigate_to_option_group(page, self.group_name):
@@ -50,29 +56,12 @@ class PlaywrightWorker(QThread):
                 if 'browser' in locals():
                     browser.close()
 
-    def login(self, page):
-        try:
-            self.status_update.emit("Logging in...")
-            page.goto("https://www.restoconcept.com/admin/logon.asp")
-            page.fill("#adminuser", self.username)
-            page.fill("#adminPass", self.password)
-            page.click("#btn1")
-            
-            try:
-                page.wait_for_selector('td[align="center"][style="background-color:#eeeeee"]:has-text("© Copyright 2024 - Restoconcept")', timeout=5000)
-                self.status_update.emit("Login successful.")
-                return True
-            except PlaywrightTimeoutError:
-                self.error_occurred.emit("Login failed. Please check your username and password.")
-                return False
-        except Exception as e:
-            self.error_occurred.emit(f"Login error: {str(e)}")
-            return False
+    
 
     def navigate_to_option_group(self, page, group_name):
         try:
             self.status_update.emit(f"Navigating to option group: {group_name}")
-            page.goto("https://www.restoconcept.com/admin/options/optionsgroupslist.asp")
+            page.goto(f"{BASE_URL}/options/optionsgroupslist.asp")
             page.fill("#psearch", group_name)
             page.click('button:has-text("Rechercher")')
 
@@ -118,8 +107,7 @@ class RestoConcept_Option_ManagerGUI(QWidget):
 
     def initUI(self):
         self.setWindowTitle('RestoConcept Option Manager')
-        self.setGeometry(100, 100, 800, 600)
-
+        self.setGeometry(100, 100, 600, 600)
         main_layout = QHBoxLayout()
 
         # Left panel for inputs
@@ -246,7 +234,7 @@ class RestoConcept_Option_ManagerGUI(QWidget):
             title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #1877f2; margin-bottom: 20px;")
 
     def add_option_to_list(self):
-        option = self.options_input.text().strip()
+        option = self.options_input.text().strip()  # Strip whitespace before adding
         if option:
             self.options_list.addItem(option)
             self.options_input.clear()
@@ -264,7 +252,7 @@ class RestoConcept_Option_ManagerGUI(QWidget):
             self.show_error("Please provide an option group.")
             return
 
-        options = [self.options_list.item(i).text() for i in range(self.options_list.count())]
+        options = [self.options_list.item(i).text().strip() for i in range(self.options_list.count())]
         if not options:
             self.show_error("Please add at least one option.")
             return
@@ -277,6 +265,7 @@ class RestoConcept_Option_ManagerGUI(QWidget):
         self.thread.error_occurred.connect(self.show_error)
 
         self.start_button.setDisabled(True)
+        self.thread.finished.connect(lambda: self.start_button.setDisabled(False))
         self.thread.start()
 
     def update_progress(self, progress):
