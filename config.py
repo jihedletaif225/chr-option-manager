@@ -1,2 +1,2 @@
 
-BASE_URL = "https://www.restoconcept.com/admin"
+BASE_URL = ""
